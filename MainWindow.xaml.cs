@@ -11,6 +11,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.IO;
 
 namespace OTPAuthorizer
 {
@@ -21,16 +22,23 @@ namespace OTPAuthorizer
 	{
 		private System.Timers.Timer timer;
 		private List<AuthorizerEntry> authorizers;
-	
+
 		public MainWindow()
 		{
 			InitializeComponent();
 
-			string[] keyStrings = new[]
+			string[] keyStrings;
+
+			string keyfile = "keys.txt";
+
+			if (File.Exists(keyfile))
 			{
-				"otpauth://totp/Test%20Account:user1@example.com?secret=hen324SN4552nowenfnwererw",
-				"otpauth://totp/bank.customer@example.com?period=15&digits=8&secret=abcdefghijklmnop234",
-			};
+				keyStrings = File.ReadAllLines(keyfile);
+			}
+			else
+			{
+				keyStrings = new[] { "otpauth://totp/Test%20Account:user1@example.com?secret=hen324SN4552nowenfnwererw", "otpauth://totp/bank.customer@example.com?period=15&digits=8&secret=abcdefghijklmnop234" };
+			}
 
 			authorizers = new List<AuthorizerEntry>();
 
