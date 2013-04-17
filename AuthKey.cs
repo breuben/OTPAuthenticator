@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
 using System.Web;
@@ -47,42 +48,66 @@ namespace breuben.OTP
 			if (uri.Scheme != "otpauth")
 				throw new ArgumentException("URI not of type otpauth.");
 
-			AuthType authType;
-			if (Enum.TryParse<AuthType>(uri.Host, true, out authType))
-				this.Type = authType;
-			else
-				throw new ArgumentException(string.Format("Unsupported OTP Auth Type '{0}'", uri.Host));
+			this.Type = parseAuthType(uri);
 
 			this.Label = HttpUtility.UrlDecode(uri.AbsolutePath.Substring(1));
 
 			var parameters = HttpUtility.ParseQueryString(uri.Query);
+
+			this.Key = parseKey(parameters);
+
+			this.NumDigits = parseNumDigits(parameters);
+
+			this.Period = parsePeriod(parameters);
+
+			this._algorithmType = parseAlgorithm(parameters);
+		}
+
+		private static AuthType parseAuthType(Uri uri)
+		{
+			AuthType authType;
+
+			if (Enum.TryParse<AuthType>(uri.Host, true, out authType))
+				return authType;
+
+			throw new ArgumentException(string.Format("Unsupported OTP Auth Type '{0}'", uri.Host));
+		}
+
+		private static byte[] parseKey(NameValueCollection parameters)
+		{
 			if (parameters.AllKeys.Contains("secret", StringComparer.InvariantCultureIgnoreCase))
-				this.Key = Base32Decode(parameters["secret"]);
-			else
-				throw new ArgumentException("'secret' parameter required in otpauth URI.");
+				return Base32Decode(parameters["secret"]);
 
+			throw new ArgumentException("'secret' parameter required in otpauth URI.");
+		}
+
+		private static int parseNumDigits(NameValueCollection parameters)
+		{
 			if (parameters.AllKeys.Contains("digits", StringComparer.InvariantCultureIgnoreCase))
-				this.NumDigits = Convert.ToInt32(parameters["digits"]);
-			else
-				this.NumDigits = 6;
+				return Convert.ToInt32(parameters["digits"]);
 
+			return 6;
+		}
+
+		private static int parsePeriod(NameValueCollection parameters)
+		{
 			if (parameters.AllKeys.Contains("period", StringComparer.InvariantCultureIgnoreCase))
-				this.Period = Convert.ToInt32(parameters["period"]);
-			else
-				this.Period = 30;
+				return Convert.ToInt32(parameters["period"]);
 
-			if (parameters.AllKeys.Contains("algorithm", StringComparer.InvariantCultureIgnoreCase))
-			{
-				AlgorithmType otpAlgorithm;
-				if (Enum.TryParse<AlgorithmType>(parameters["algorithm"], true, out otpAlgorithm))
-					this._algorithmType = otpAlgorithm;
-				else
-					throw new ArgumentException(string.Format("Unsupported OTP Algorithm Type '{0}'", parameters["algorithm"]));
-			}
-			else
-			{
-				this._algorithmType = AlgorithmType.SHA1;
-			}
+			return 30;
+		}
+
+		private static AlgorithmType parseAlgorithm(NameValueCollection parameters)
+		{
+			if (!parameters.AllKeys.Contains("algorithm", StringComparer.InvariantCultureIgnoreCase))
+				return AlgorithmType.SHA1;
+
+			AlgorithmType otpAlgorithm;
+
+			if (Enum.TryParse<AlgorithmType>(parameters["algorithm"], true, out otpAlgorithm))
+				return otpAlgorithm;
+
+			throw new ArgumentException(string.Format("Unsupported OTP Algorithm Type '{0}'", parameters["algorithm"]));
 		}
 
 		public static byte[] Base32Decode(string base32String)
