@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
-using System.Text;
 using System.Web;
 
-namespace breuben.OTP
+namespace OTPAuthorizer
 {
 	public enum AuthType
 	{
@@ -26,30 +25,19 @@ namespace breuben.OTP
 		public AuthType Type { get; set; }
 		public string Label { get; set; }
 		public byte[] Key { get; set; }
-		private int _numDigits
-		{
-			get { return _numDigits; }
-			set
-			{
-				if (value == 6 || value == 8)
-					_numDigits = value;
-				else
-					throw new ArgumentException("Code digits may only be 6 or 8.");
-			}
-		}
 		public int NumDigits { get; set; }
-		private AlgorithmType _algorithmType = AlgorithmType.SHA1;
+		private readonly AlgorithmType _algorithmType = AlgorithmType.SHA1;
 		public string Algorithm { get { return _algorithmType.ToString(); } }
 		public int Period { get; set; }
+		public int Counter { get; set; }
 
 		public AuthKey(string uriString)
 		{
-			Uri uri = new Uri(uriString);
+			var uri = new Uri(uriString);
 			if (uri.Scheme != "otpauth")
 				throw new ArgumentException("URI not of type otpauth.");
 
 			this.Type = parseAuthType(uri);
-
 			this.Label = HttpUtility.UrlDecode(uri.AbsolutePath.Substring(1));
 
 			var parameters = HttpUtility.ParseQueryString(uri.Query);
@@ -58,16 +46,19 @@ namespace breuben.OTP
 
 			this.NumDigits = parseNumDigits(parameters);
 
-			this.Period = parsePeriod(parameters);
-
 			this._algorithmType = parseAlgorithm(parameters);
+
+			if (this.Type == AuthType.TOTP)
+				this.Period = parsePeriod(parameters);
+			else
+				this.Counter = parseCounter(parameters);
 		}
 
 		private static AuthType parseAuthType(Uri uri)
 		{
 			AuthType authType;
 
-			if (Enum.TryParse<AuthType>(uri.Host, true, out authType))
+			if (Enum.TryParse(uri.Host, true, out authType))
 				return authType;
 
 			throw new ArgumentException(string.Format("Unsupported OTP Auth Type '{0}'", uri.Host));
@@ -97,6 +88,14 @@ namespace breuben.OTP
 			return 30;
 		}
 
+		private static int parseCounter(NameValueCollection parameters)
+		{
+			if (parameters.AllKeys.Contains("counter", StringComparer.InvariantCultureIgnoreCase))
+				return Convert.ToInt32(parameters["counter"]);
+
+			throw new ArgumentException("HOTP type key URL missing 'counter' parameter.");
+		}
+
 		private static AlgorithmType parseAlgorithm(NameValueCollection parameters)
 		{
 			if (!parameters.AllKeys.Contains("algorithm", StringComparer.InvariantCultureIgnoreCase))
@@ -104,7 +103,7 @@ namespace breuben.OTP
 
 			AlgorithmType otpAlgorithm;
 
-			if (Enum.TryParse<AlgorithmType>(parameters["algorithm"], true, out otpAlgorithm))
+			if (Enum.TryParse(parameters["algorithm"], true, out otpAlgorithm))
 				return otpAlgorithm;
 
 			throw new ArgumentException(string.Format("Unsupported OTP Algorithm Type '{0}'", parameters["algorithm"]));
@@ -112,8 +111,8 @@ namespace breuben.OTP
 
 		public static byte[] Base32Decode(string base32String)
 		{
-			string base32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567abcdefghijklmnopqrstuvwxyz";
-			List<byte> buffer = new List<byte>();
+			const string base32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567abcdefghijklmnopqrstuvwxyz";
+			var buffer = new List<byte>();
 
 			int i = 0;
 			foreach (char c in base32String)
@@ -121,7 +120,7 @@ namespace breuben.OTP
 				if (c == '=')
 					break;
 
-				byte val = (byte)base32.IndexOf(c);
+				var val = (byte)base32.IndexOf(c);
 				if (val < 0x00)
 					throw new ArgumentException("Invalid character in Base32 string.");
 

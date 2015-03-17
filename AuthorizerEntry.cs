@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using breuben.OTP;
-using System.Windows.Controls;
+﻿using System.Windows.Controls;
 using System.Windows;
 
 namespace OTPAuthorizer
@@ -53,7 +48,7 @@ namespace OTPAuthorizer
 
 		public void UpdateCodeAsync()
 		{
-			AuthCode code = Authenticator.GenerateTOTP(this.authKey);
+			AuthCode code = Authenticator.GenerateAuthCode(this.authKey);
 			codeLabel.Dispatcher.Invoke(new UpdateCodeCallback(this.UpdateCode), new object[] { code });
 		}
 

@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Security.Cryptography;
 
-namespace breuben.OTP
+namespace OTPAuthorizer
 {
 	public class AuthCode
 	{
@@ -16,19 +13,32 @@ namespace breuben.OTP
 	{
 		private static int[] DIGITS_POWER = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000 };
 
-		public static AuthCode GenerateTOTP(AuthKey key)
+		public static AuthCode GenerateAuthCode(AuthKey key)
 		{
+			if (key.Type == AuthType.HOTP)
+				return GenerateHOTP(key, key.Counter);
+			
 			return GenerateTOTP(key, DateTime.UtcNow);
 		}
 
 		public static AuthCode GenerateTOTP(AuthKey key, DateTime dateTime)
 		{
-			byte[] T = getTfromTime(dateTime, key.Period);
+			long T = getTfromTime(dateTime, key.Period);
+
+			var authCode = GenerateHOTP(key, T);
+			authCode.Age = getAgeFromTime(dateTime, key.Period);
+
+			return authCode;
+		}
+
+		private static AuthCode GenerateHOTP(AuthKey key, long C)
+		{
+			byte[] Cbytes = getBytesFromLong(C);
 
 			HMAC hmac = HMAC.Create("HMAC" + key.Algorithm);
 			hmac.Key = key.Key;
 
-			byte[] hash = hmac.ComputeHash(T);
+			byte[] hash = hmac.ComputeHash(Cbytes);
 
 			// put selected bytes into result int
 			int offset = hash[hash.Length - 1] & 0xf;
@@ -41,7 +51,7 @@ namespace breuben.OTP
 			while (totpString.Length < key.NumDigits)
 				totpString = "0" + totpString;
 
-			return new AuthCode { Value = totpString, Age = getAgeFromTime(dateTime, key.Period) };
+			return new AuthCode { Value = totpString };
 		}
 
 		private static double getEpoch(DateTime dateTime)
@@ -49,15 +59,18 @@ namespace breuben.OTP
 			return (dateTime - new DateTime(1970, 1, 1)).TotalSeconds;
 		}
 
-		private static byte[] getTfromTime(DateTime dateTime, int period = 30)
+		private static long getTfromTime(DateTime dateTime, int period = 30)
 		{
 			long epoch = (long)getEpoch(dateTime);
 			long T = epoch / period;
+			return T;
+		}
 
-			byte[] Tbytes = BitConverter.GetBytes(T);
-			Array.Reverse(Tbytes);
-
-			return Tbytes;
+		private static byte[] getBytesFromLong(long T)
+		{
+			byte[] bytes = BitConverter.GetBytes(T);
+			Array.Reverse(bytes);
+			return bytes;
 		}
 
 		private static double getAgeFromTime(DateTime dateTime, int period = 30)
